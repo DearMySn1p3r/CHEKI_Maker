@@ -508,7 +508,7 @@ const PATTERNS = [['none','없음'],['dots','도트'],['gingham','체크'],['hea
 const MOTIONS = [
   ['none','없음'],['sparkle','반짝'],['glitter','가루'],['star','별'],
   ['heart','하트'],['petal','꽃잎'],['snow','눈'],
-  ['bokeh','보케'],['bubble','물방울'],['ring','물결'],['mix','모두']
+  ['bokeh','보케'],['bubble','물방울'],['ring','물결']
 ];
 const FINISHES = [['none','없음'],['glow','뽀샤시'],['leak','빛번짐'],['vignette','비네트'],['dream','몽글']];
 const FX_COLORS = ['#ffffff','#ffeaf3','#ffd9e8','#ffb3d2','#ff8ab5','#fff0f6','#ffd7c9'];
@@ -643,16 +643,14 @@ function ensureParticles(){
   pKey = key;
   const rnd = mulberry32(20260818);
   particles = [];
-  const MIXES = ['sparkle','glitter','heart','star','petal','bokeh'];
   for(let i=0;i<state.fxCount;i++){
     particles.push({
       x:rnd(), y:rnd(), s:.55+rnd()*.9, ph:rnd(),
-      sp:1+Math.floor(rnd()*3), rot:rnd()*Math.PI*2, sway:.02+rnd()*.05,
-      kind: MIXES[Math.floor(rnd()*MIXES.length)]
+      sp:1+Math.floor(rnd()*3), rot:rnd()*Math.PI*2, sway:.02+rnd()*.05
     });
   }
 }
-const ANIMATED = new Set(['sparkle','glitter','star','heart','petal','snow','bokeh','bubble','ring','mix']);
+const ANIMATED = new Set(['sparkle','glitter','star','heart','petal','snow','bokeh','bubble','ring']);
 
 function drawMotion(c, sc, t){
   if(state.motion==='none') return;
@@ -670,7 +668,7 @@ function drawMotion(c, sc, t){
   c.beginPath(); c.rect(X,Y,W,H); c.clip();
 
   for(const p of particles){
-    const kind = state.motion==='mix' ? p.kind : state.motion;
+    const kind = state.motion;
     const ph = wrap01(t*p.sp + p.ph);
     let px, py, alpha = 1, size = base*.02*p.s, rot = p.rot;
 
