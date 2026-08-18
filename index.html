@@ -599,15 +599,19 @@ function isDark(hex){
 const ink = document.createElement('canvas');
 const ictx = ink.getContext('2d');
 
-function drawStroke(c, st, sc){
+function drawStroke(c, st, sc, opts){
+  opts = opts || {};
   const p = st.points; if(!p.length) return;
   c.save();
   c.lineCap='round'; c.lineJoin='round';
-  c.strokeStyle = st.color; c.fillStyle = st.color;
-  let lw = st.size*sc;
-  if(st.type==='marker'){ c.globalAlpha=.42; lw = st.size*2.3*sc; }
-  if(st.type==='glow'){ c.shadowColor=st.color; c.shadowBlur=st.size*2.4*sc; }
+  let col = st.color, lw = st.size*sc;
+  if(st.type==='marker'){ if(!opts.flat) c.globalAlpha=.42; lw = st.size*2.3*sc; }
+  if(st.type==='glow'){
+    if(!opts.flat){ c.shadowColor=st.color; c.shadowBlur=st.size*2.4*sc; }
+    if(opts.core){ col='#ffffff'; lw = Math.max(1, lw*.45); }
+  }
   if(st.type==='eraser'){ c.globalCompositeOperation='destination-out'; lw = st.size*2.4*sc; }
+  c.strokeStyle = col; c.fillStyle = col;
   c.lineWidth = lw;
   if(p.length===1){
     c.beginPath(); c.arc(p[0].x*sc,p[0].y*sc,lw/2,0,Math.PI*2); c.fill();
@@ -620,9 +624,62 @@ function drawStroke(c, st, sc){
     }
     c.lineTo(p[p.length-1].x*sc,p[p.length-1].y*sc);
     c.stroke();
-    if(st.type==='glow'){ c.shadowBlur=0; c.lineWidth=Math.max(1,lw*.45); c.strokeStyle='#fff'; c.stroke(); }
+    if(st.type==='glow' && !opts.flat && !opts.core){ c.shadowBlur=0; c.lineWidth=Math.max(1,lw*.45); c.strokeStyle='#fff'; c.stroke(); }
   }
   c.restore();
+}
+const MARKER_ALPHA = .42;
+function mkLayer(c){
+  const t = document.createElement('canvas');
+  t.width = c.canvas.width; t.height = c.canvas.height;
+  return t;
+}
+/* 형광펜과 네온은 연달아 그은 같은 색 획을 한 장에 모아 그린 뒤
+   투명도와 빛번짐을 한 번만 입힌다. 그래야 획이 겹치거나 스스로
+   교차해도 그 부분만 진해지지 않고 한 줄로 이어져 보인다. */
+function paintStrokes(c, sc){
+  const list = state.strokes;
+  let i = 0;
+  while(i < list.length){
+    const st = list[i];
+
+    if(st.type === 'marker'){
+      let j = i;
+      while(j < list.length && list[j].type==='marker' && list[j].color===st.color) j++;
+      const tmp = mkLayer(c), tc = tmp.getContext('2d');
+      for(let k=i;k<j;k++) drawStroke(tc, list[k], sc, {flat:true});
+      c.save();
+      c.globalAlpha = MARKER_ALPHA;
+      c.drawImage(tmp, 0, 0);
+      c.restore();
+      i = j;
+
+    } else if(st.type === 'glow'){
+      let j = i;
+      while(j < list.length && list[j].type==='glow' && list[j].color===st.color) j++;
+      const body = mkLayer(c), bc = body.getContext('2d');
+      const core = mkLayer(c), cc = core.getContext('2d');
+      let blur = 0;
+      for(let k=i;k<j;k++){
+        drawStroke(bc, list[k], sc, {flat:true});
+        drawStroke(cc, list[k], sc, {flat:true, core:true});
+        blur = Math.max(blur, list[k].size*2.4*sc);
+      }
+      c.save();
+      c.shadowColor = st.color; c.shadowBlur = blur;
+      c.drawImage(body, 0, 0);
+      c.drawImage(body, 0, 0);
+      c.shadowBlur = 0;
+      c.drawImage(body, 0, 0);
+      c.drawImage(core, 0, 0);
+      c.restore();
+      i = j;
+
+    } else {
+      drawStroke(c, list[i], sc);
+      i++;
+    }
+  }
 }
 let inkDirty = true;
 function buildInk(sc){
@@ -630,7 +687,7 @@ function buildInk(sc){
   if(ink.width!==w||ink.height!==h){ ink.width=w; ink.height=h; }
   else if(inkDirty) ictx.clearRect(0,0,w,h);
   else return ink;
-  for(const st of state.strokes) drawStroke(ictx,st,sc);
+  paintStrokes(ictx, sc);
   inkDirty = false;
   return ink;
 }
@@ -638,7 +695,7 @@ function buildInkAt(sc){
   const c=document.createElement('canvas');
   c.width=CARD_W*sc; c.height=CARD_H*sc;
   const cc=c.getContext('2d');
-  for(const st of state.strokes) drawStroke(cc,st,sc);
+  paintStrokes(cc, sc);
   return c;
 }
 
