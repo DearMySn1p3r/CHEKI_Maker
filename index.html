@@ -130,13 +130,13 @@
   /* ---------- panel ---------- */
   .panel{padding:18px}
   .tabs{
-    display:grid;grid-template-columns:repeat(5,1fr);gap:2px;
+    display:grid;grid-template-columns:repeat(6,1fr);gap:2px;
     background:var(--track);border-radius:999px;padding:4px;margin-bottom:20px;
     box-shadow:inset 0 1px 3px rgba(220,160,190,.16);
   }
   .tab{
     appearance:none;border:0;background:none;cursor:pointer;
-    padding:9px 1px;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--muted);
+    padding:9px 1px;border-radius:999px;font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap;
     transition:background .18s,color .18s,box-shadow .18s;
   }
   .tab:hover{color:var(--pink-deep)}
@@ -238,6 +238,21 @@
   .drop-title{margin:0;font-size:13.5px;font-weight:700;color:var(--pink-deep)}
   .drop-sub{margin:6px 0 0;font-size:11.5px;color:var(--muted);line-height:1.6}
 
+  .st-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+  .st-thumb{
+    position:relative;aspect-ratio:1;border:0;padding:0;cursor:pointer;
+    border-radius:13px;background:rgba(255,255,255,.72);
+    box-shadow:0 3px 9px -5px rgba(210,130,170,.9), inset 0 1px 0 rgba(255,255,255,.9);
+    overflow:hidden;transition:transform .14s,box-shadow .16s;
+  }
+  .st-thumb:hover{transform:translateY(-2px) scale(1.05);box-shadow:0 6px 14px -6px rgba(255,120,175,.95)}
+  .st-thumb img{width:100%;height:100%;object-fit:contain;padding:4px;display:block}
+  .st-thumb .x{
+    position:absolute;top:2px;right:2px;width:15px;height:15px;border-radius:50%;
+    background:rgba(255,255,255,.92);color:var(--pink-deep);border:0;cursor:pointer;
+    font-size:10px;line-height:15px;padding:0;font-weight:700;
+    box-shadow:0 1px 4px -1px rgba(210,130,170,.9);
+  }
   .note{font-size:11.5px;color:var(--muted);line-height:1.7;padding:2px 2px 0}
   .rule{border-top:1px solid rgba(255,255,255,.9);margin:18px 0}
 
@@ -288,6 +303,7 @@
         <button class="tab" role="tab" aria-selected="true" data-tab="photo">사진</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="draw">싸인</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="text">글씨</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="sticker">스티커</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="effect">효과</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="frame">프레임</button>
       </div>
@@ -379,6 +395,34 @@
           <button class="btn quiet sm" id="clearItems">전체 지우기</button>
         </div>
         <p class="note">올린 글씨를 눌러 다시 고를 수 있습니다. 모서리 점을 끌면 크기와 각도가 같이 바뀝니다.</p>
+      </div>
+
+      <!-- STICKER -->
+      <div class="pane" id="pane-sticker">
+        <div class="field">
+          <div class="drop" id="stDrop">
+            <p class="drop-title">스티커 이미지 올리기</p>
+            <p class="drop-sub">배경이 없는 PNG를 쓰면 예쁘게 붙어요<br>여러 장 한 번에 고를 수 있습니다</p>
+          </div>
+          <input type="file" id="stFile" accept="image/*" multiple class="sr-only">
+        </div>
+        <div class="field" id="stGridField" style="display:none">
+          <span class="label">눌러서 붙이기</span>
+          <div class="st-grid" id="stGrid"></div>
+        </div>
+        <div class="field">
+          <span class="label">크기</span>
+          <div class="range-row"><input type="range" id="stSize" min="20" max="400" value="130"><span class="range-val" id="stSizeVal">130</span></div>
+        </div>
+        <div class="field">
+          <span class="label">투명도</span>
+          <div class="range-row"><input type="range" id="stOpacity" min="10" max="100" value="100"><span class="range-val" id="stOpacityVal">100%</span></div>
+        </div>
+        <div class="field row">
+          <button class="btn sm" id="stFlip">좌우 반전</button>
+          <button class="btn sm" id="stDel">선택 지우기</button>
+        </div>
+        <p class="note">붙인 스티커를 눌러 옮기고, 모서리 점으로 크기와 각도를 바꿉니다. 이 탭에서는 붙여넣기와 드래그도 스티커로 올라가요.</p>
       </div>
 
       <!-- EFFECT -->
@@ -473,6 +517,7 @@ const state = {
   selected:null,
   brush:{ type:'pen', color:'#ff5c8a', size:6 },
   text:{ font:'Nanum Pen Script', fx:'none', color:'#ff5c8a', sub:'#ffffff', size:46, bold:false },
+  sticker:{ size:130, opacity:1 },
   history:[]
 };
 
@@ -897,6 +942,21 @@ function drawTextItem(c, it, sc){
   c.restore();
 }
 
+const stickerImgs = [];
+function drawImageItem(c, it, sc){
+  const img = stickerImgs[it.img];
+  if(!img || !img.naturalWidth) return;
+  const w = it.size, h = it.size*(img.naturalHeight/img.naturalWidth);
+  it._w = w; it._h = h;
+  c.save();
+  c.translate(it.x*sc, it.y*sc);
+  c.rotate(it.rot);
+  if(it.flip) c.scale(-1,1);
+  c.globalAlpha = it.opacity==null ? 1 : it.opacity;
+  c.drawImage(img, -w/2*sc, -h/2*sc, w*sc, h*sc);
+  c.restore();
+}
+
 function renderTo(c, sc, ui, t){
   t = t || 0;
   c.save();
@@ -951,7 +1011,9 @@ function renderTo(c, sc, ui, t){
   c.restore();
 
   /* 글씨 */
-  for(const it of state.items) drawTextItem(c,it,sc);
+  for(const it of state.items){
+    if(it.type==='image') drawImageItem(c,it,sc); else drawTextItem(c,it,sc);
+  }
 
   /* 선택 UI */
   if(ui && state.selected){
@@ -1090,8 +1152,13 @@ cv.addEventListener('pointermove', e => {
     const it=drag.it, d=Math.hypot(pt.x-it.x,pt.y-it.y);
     it.size = Math.max(8, Math.min(400, drag.s0*(d/Math.max(6,drag.d0))));
     it.rot  = drag.r0 + (Math.atan2(pt.y-it.y,pt.x-it.x)-drag.a0);
-    $('textSize').value = Math.round(Math.min(140,it.size));
-    $('textSizeVal').textContent = Math.round(it.size);
+    if(it.type==='image'){
+      $('stSize').value = Math.round(Math.min(400,it.size));
+      $('stSizeVal').textContent = Math.round(it.size);
+    } else {
+      $('textSize').value = Math.round(Math.min(140,it.size));
+      $('textSizeVal').textContent = Math.round(it.size);
+    }
     render();
   }
 });
@@ -1116,7 +1183,14 @@ cv.addEventListener('wheel', e => {
 /* ============ 아이템 ============ */
 function selectItem(it){
   state.selected = it;
-  if(it){
+  if(it && it.type==='image'){
+    state.sticker.size = it.size;
+    state.sticker.opacity = it.opacity==null ? 1 : it.opacity;
+    $('stSize').value = Math.round(Math.min(400,it.size));
+    $('stSizeVal').textContent = Math.round(it.size);
+    $('stOpacity').value = Math.round(state.sticker.opacity*100);
+    $('stOpacityVal').textContent = Math.round(state.sticker.opacity*100)+'%';
+  } else if(it){
     $('textInput').value = it.text;
     $('fontSel').value = it.font;
     Object.assign(state.text,{ font:it.font, fx:it.fx, color:it.color, sub:it.sub, size:it.size, bold:!!it.bold });
@@ -1137,7 +1211,7 @@ function addTextItem(){
   const t = $('textInput').value.trim();
   if(!t){ toast('문구를 먼저 적어주세요'); $('textInput').focus(); return; }
   pushHistory();
-  const it = { text:t, font:state.text.font, fx:state.text.fx, color:state.text.color,
+  const it = { type:'text', text:t, font:state.text.font, fx:state.text.fx, color:state.text.color,
                sub:state.text.sub, size:state.text.size, bold:state.text.bold,
                x:PHOTO.x+PHOTO.w/2, y:PHOTO.y+PHOTO.h*0.78,
                rot:(Math.random()*.12-.06), _w:100, _h:40 };
@@ -1264,10 +1338,20 @@ $('file').onchange = e => { readFile(e.target.files[0]); e.target.value=''; };
 ['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over')}));
 $('drop').addEventListener('drop', e=>{ e.stopPropagation(); readFile(e.dataTransfer.files[0]); });
 document.addEventListener('dragover', e=>e.preventDefault());
-document.addEventListener('drop', e=>{ e.preventDefault(); if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
+document.addEventListener('drop', e=>{
+  e.preventDefault();
+  const fs = e.dataTransfer.files;
+  if(!fs || !fs[0]) return;
+  if(state.tool==='sticker') [...fs].forEach(readSticker);
+  else readFile(fs[0]);
+});
 document.addEventListener('paste', e=>{
   for(const it of (e.clipboardData?.items||[])){
-    if(it.type.startsWith('image/')){ readFile(it.getAsFile()); break; }
+    if(it.type.startsWith('image/')){
+      if(state.tool==='sticker') readSticker(it.getAsFile());
+      else readFile(it.getAsFile());
+      break;
+    }
   }
 });
 $('zoom').oninput = e => {
@@ -1303,7 +1387,7 @@ FONTS.forEach(([v,l])=>{
 fontSel.value = state.text.font;
 fontSel.onchange = e => {
   state.text.font=e.target.value;
-  if(state.selected){ state.selected.font=e.target.value; render(); }
+  if(state.selected && state.selected.type!=='image'){ state.selected.font=e.target.value; render(); }
 };
 function updateSubLabel(){
   $('colorLabel').textContent = state.text.fx==='neon' ? '네온 빛 색' : '글자색';
@@ -1314,24 +1398,24 @@ function updateSubLabel(){
 }
 makeChips('weights', [['normal','보통'],['bold','두껍게']], 'normal', v=>{
   state.text.bold = (v==='bold');
-  if(state.selected){ state.selected.bold = state.text.bold; render(); }
+  if(state.selected && state.selected.type!=='image'){ state.selected.bold = state.text.bold; render(); }
 });
 makeChips('fxChips', FX, 'none', v=>{
   state.text.fx=v; updateSubLabel();
-  if(state.selected){ state.selected.fx=v; render(); }
+  if(state.selected && state.selected.type!=='image'){ state.selected.fx=v; render(); }
 });
 makeSwatches('textSwatches', TEXT_COLORS, state.text.color, c=>{
-  state.text.color=c; if(state.selected){ state.selected.color=c; render(); }
+  state.text.color=c; if(state.selected && state.selected.type!=='image'){ state.selected.color=c; render(); }
 });
 makeSwatches('subSwatches', SUB_COLORS, state.text.sub, c=>{
-  state.text.sub=c; if(state.selected){ state.selected.sub=c; render(); }
+  state.text.sub=c; if(state.selected && state.selected.type!=='image'){ state.selected.sub=c; render(); }
 });
 $('textSize').oninput = e => {
   state.text.size=+e.target.value; $('textSizeVal').textContent=e.target.value;
-  if(state.selected){ state.selected.size=+e.target.value; render(); }
+  if(state.selected && state.selected.type!=='image'){ state.selected.size=+e.target.value; render(); }
 };
 $('textInput').oninput = e => {
-  if(state.selected){ state.selected.text = e.target.value || ' '; render(); }
+  if(state.selected && state.selected.type!=='image'){ state.selected.text = e.target.value || ' '; render(); }
 };
 $('addText').onclick = addTextItem;
 $('delItem').onclick = () => state.selected ? removeItem(state.selected) : toast('먼저 지울 글씨를 눌러주세요');
@@ -1357,6 +1441,88 @@ makeChips('orient', [['portrait','세로'],['landscape','가로']], 'portrait', 
 });
 makeChips('quality', [['2','보통'],['3','고화질'],['4','최고']], '3', v=>{ state.quality=+v; });
 
+/* 스티커 */
+function renderStickerGrid(){
+  const grid = $('stGrid');
+  grid.innerHTML = '';
+  stickerImgs.forEach((img,i)=>{
+    if(!img) return;
+    const b = document.createElement('div');
+    b.className = 'st-thumb'; b.setAttribute('role','button'); b.tabIndex = 0;
+    b.title = '붙이기';
+    b.onkeydown = ev => { if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); addSticker(i); } };
+    const im = document.createElement('img'); im.src = img.src; im.alt = '';
+    b.appendChild(im);
+    b.onclick = () => addSticker(i);
+    const x = document.createElement('button');
+    x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.title = '목록에서 빼기';
+    x.onclick = ev => {
+      ev.stopPropagation();
+      pushHistory();
+      state.items = state.items.filter(it => !(it.type==='image' && it.img===i));
+      stickerImgs[i] = null;
+      if(state.selected && !state.items.includes(state.selected)) state.selected = null;
+      renderStickerGrid(); render();
+    };
+    b.appendChild(x);
+    grid.appendChild(b);
+  });
+  $('stGridField').style.display = grid.children.length ? '' : 'none';
+}
+function addSticker(i){
+  const img = stickerImgs[i]; if(!img) return;
+  pushHistory();
+  const it = {
+    type:'image', img:i,
+    size:state.sticker.size, opacity:state.sticker.opacity,
+    x:PHOTO.x+PHOTO.w/2, y:PHOTO.y+PHOTO.h/2,
+    rot:(Math.random()*.14-.07), flip:false, _w:100, _h:100
+  };
+  state.items.push(it);
+  selectItem(it);
+  hint('스티커를 끌어 옮기고, 모서리 점으로 크기와 각도를 맞춰보세요');
+}
+function readSticker(f){
+  if(!f || !f.type.startsWith('image/')){ toast('이미지 파일만 올릴 수 있어요'); return; }
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const i = stickerImgs.length;
+      stickerImgs.push(img);
+      renderStickerGrid();
+      addSticker(i);
+      toast('스티커를 붙였어요');
+    };
+    img.onerror = () => toast('이 이미지는 읽지 못했어요');
+    img.src = r.result;
+  };
+  r.readAsDataURL(f);
+}
+$('stDrop').onclick = () => $('stFile').click();
+$('stFile').onchange = e => { [...e.target.files].forEach(readSticker); e.target.value=''; };
+['dragenter','dragover'].forEach(ev=>$('stDrop').addEventListener(ev,e=>{e.preventDefault();$('stDrop').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('stDrop').addEventListener(ev,e=>{e.preventDefault();$('stDrop').classList.remove('over')}));
+$('stDrop').addEventListener('drop', e => { e.stopPropagation(); [...e.dataTransfer.files].forEach(readSticker); });
+$('stSize').oninput = e => {
+  state.sticker.size = +e.target.value; $('stSizeVal').textContent = e.target.value;
+  if(state.selected && state.selected.type==='image'){ state.selected.size = +e.target.value; render(); }
+};
+$('stOpacity').oninput = e => {
+  state.sticker.opacity = +e.target.value/100; $('stOpacityVal').textContent = e.target.value+'%';
+  if(state.selected && state.selected.type==='image'){ state.selected.opacity = state.sticker.opacity; render(); }
+};
+$('stFlip').onclick = () => {
+  const it = state.selected;
+  if(!it || it.type!=='image'){ toast('먼저 스티커를 눌러주세요'); return; }
+  it.flip = !it.flip; render();
+};
+$('stDel').onclick = () => {
+  const it = state.selected;
+  if(!it || it.type!=='image'){ toast('먼저 스티커를 눌러주세요'); return; }
+  removeItem(it);
+};
+
 /* 효과 */
 makeChips('motions', MOTIONS, 'none', v=>{
   state.motion=v; pKey='';
@@ -1379,6 +1545,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     cv.classList.toggle('drawing', state.tool==='draw');
     if(state.tool==='draw'){ state.selected=null; hint('카드 위 어디든 싸인을 남겨보세요'); }
     else if(state.tool==='text') hint('문구를 적고 글씨 올리기를 눌러주세요');
+    else if(state.tool==='sticker') hint('이미지를 올리면 카드 위에 붙일 수 있어요');
     else if(state.tool==='effect') hint('반짝임을 고르면 미리보기가 움직입니다');
     else if(state.tool==='frame') hint('프레임 색과 무늬를 골라보세요');
     else hint(state.photo ? '드래그로 옮기고 휠로 크기를 맞춰보세요' : '사진 탭에서 일러스트를 올려주세요');
@@ -1391,6 +1558,7 @@ $('undoBtn').onclick = undo;
 $('resetBtn').onclick = () => {
   if(!confirm('지금 만든 체키를 모두 지우고 처음부터 시작할까요?')) return;
   state.photo=null; state.strokes=[]; state.items=[]; state.selected=null; state.history=[]; inkDirty=true;
+  stickerImgs.length=0; renderStickerGrid();
   state.filter='none'; markPressed('filters','none');
   state.motion='none'; markPressed('motions','none');
   state.finish='none'; markPressed('finishes','none');
