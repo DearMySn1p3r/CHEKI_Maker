@@ -362,7 +362,7 @@
           <div class="chips" id="fxChips"></div>
         </div>
         <div class="field">
-          <span class="label">글자색</span>
+          <span class="label" id="colorLabel">글자색</span>
           <div class="swatches" id="textSwatches"></div>
         </div>
         <div class="field" id="subColorField">
@@ -874,14 +874,12 @@ function drawTextItem(c, it, sc){
       c.lineWidth=fs*.15; c.strokeStyle=it.sub; c.strokeText(line,0,y);
       c.fillStyle=it.color; c.fillText(line,0,y);
     } else if(it.fx==='neon'){
-      c.lineJoin='round'; c.lineCap='round';
       c.shadowColor = it.color;
-      c.shadowBlur = fs*.85; c.strokeStyle = it.color; c.lineWidth = fs*.16;
-      c.strokeText(line,0,y); c.strokeText(line,0,y);
-      c.shadowBlur = fs*.42; c.fillStyle = it.color;
-      c.fillText(line,0,y); c.fillText(line,0,y);
-      c.shadowBlur = fs*.14; c.fillStyle = '#fff'; c.fillText(line,0,y);
-      c.shadowBlur = 0; c.fillStyle = '#fff'; c.fillText(line,0,y);
+      c.fillStyle = it.color;
+      c.shadowBlur = fs*.95; c.fillText(line,0,y); c.fillText(line,0,y);
+      c.shadowBlur = fs*.48; c.fillText(line,0,y);
+      c.shadowBlur = fs*.24; c.fillStyle = '#ffffff'; c.fillText(line,0,y);
+      c.shadowBlur = fs*.10; c.fillText(line,0,y);
     } else if(it.fx==='gradient'){
       const g=c.createLinearGradient(-w/2,0,w/2,0);
       g.addColorStop(0,it.color); g.addColorStop(.5,'#ffd6e6'); g.addColorStop(1,it.sub);
@@ -1308,6 +1306,7 @@ fontSel.onchange = e => {
   if(state.selected){ state.selected.font=e.target.value; render(); }
 };
 function updateSubLabel(){
+  $('colorLabel').textContent = state.text.fx==='neon' ? '네온 빛 색' : '글자색';
   const map={ outline:'테두리색', shadow:'그림자색', gradient:'끝 색', pop:'테두리색' };
   const l = map[state.text.fx];
   $('subColorField').style.display = l ? '' : 'none';
