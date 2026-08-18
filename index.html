@@ -262,7 +262,7 @@
   <header>
     <h1>Cheki <em>Maker</em></h1>
     <div class="badge">MAID CAFE CHEKI</div>
-    <p class="sub">일러스트를 올리고 싸인을 남기면<br>한 장짜리 체키가 완성됩니다</p>
+    <p class="sub">일러스트를 올리고 싸인을 남기면<br>한 장짜리 체키가 완성됩니다 ♡</p>
   </header>
 
   <main>
@@ -346,11 +346,15 @@
       <div class="pane" id="pane-text">
         <div class="field">
           <span class="label">문구</span>
-          <textarea id="textInput" placeholder="어서오세요 주인님&#10;줄바꿈도 됩니다"></textarea>
+          <textarea id="textInput" placeholder="어서오세요 주인님 ♡&#10;줄바꿈도 됩니다"></textarea>
         </div>
         <div class="field">
           <span class="label">글씨체</span>
           <select id="fontSel"></select>
+        </div>
+        <div class="field">
+          <span class="label">굵기</span>
+          <div class="chips" id="weights"></div>
         </div>
         <div class="field">
           <span class="label">효과</span>
@@ -462,12 +466,12 @@ const state = {
   finish:'none',
   quality:3,
   gifScale:0.85,
-  gifFrames:16,
+  gifFrames:24,
   strokes:[],
   items:[],
   selected:null,
   brush:{ type:'pen', color:'#ff5c8a', size:6 },
-  text:{ font:'Nanum Pen Script', fx:'none', color:'#ff5c8a', sub:'#ffffff', size:46 },
+  text:{ font:'Nanum Pen Script', fx:'none', color:'#ff5c8a', sub:'#ffffff', size:46, bold:false },
   history:[]
 };
 
@@ -502,8 +506,9 @@ const FONTS = [
 const FX = [['none','기본'],['outline','테두리'],['shadow','그림자'],['neon','네온'],['gradient','그라데이션'],['pop','두꺼운 테두리']];
 const PATTERNS = [['none','없음'],['dots','도트'],['gingham','체크'],['hearts','하트'],['fade','그라데이션']];
 const MOTIONS = [
-  ['none','없음'],['sparkle','반짝'],['glitter','가루'],
-  ['heart','하트'],['petal','꽃잎'],['bokeh','보케'],['bubble','물방울']
+  ['none','없음'],['sparkle','반짝'],['glitter','가루'],['star','별'],
+  ['heart','하트'],['petal','꽃잎'],['snow','눈'],
+  ['bokeh','보케'],['bubble','물방울'],['ring','물결'],['mix','모두']
 ];
 const FINISHES = [['none','없음'],['glow','뽀샤시'],['leak','빛번짐'],['vignette','비네트'],['dream','몽글']];
 const FX_COLORS = ['#ffffff','#ffeaf3','#ffd9e8','#ffb3d2','#ff8ab5','#fff0f6','#ffd7c9'];
@@ -597,6 +602,17 @@ function sparklePath(c,x,y,R){
   c.quadraticCurveTo(x-r,y-r,x,y-R);
   c.closePath();
 }
+function starPath(c,x,y,R,rot){
+  const r = R*.44;
+  c.save(); c.translate(x,y); c.rotate(rot||0);
+  c.beginPath();
+  for(let i=0;i<10;i++){
+    const a = -Math.PI/2 + i*Math.PI/5, rad = (i%2) ? r : R;
+    c[i?'lineTo':'moveTo'](Math.cos(a)*rad, Math.sin(a)*rad);
+  }
+  c.closePath();
+  c.restore();
+}
 function petalPath(c,x,y,s,rot){
   c.save(); c.translate(x,y); c.rotate(rot);
   c.beginPath();
@@ -627,14 +643,16 @@ function ensureParticles(){
   pKey = key;
   const rnd = mulberry32(20260818);
   particles = [];
+  const MIXES = ['sparkle','glitter','heart','star','petal','bokeh'];
   for(let i=0;i<state.fxCount;i++){
     particles.push({
       x:rnd(), y:rnd(), s:.55+rnd()*.9, ph:rnd(),
-      sp:.6+rnd()*.8, rot:rnd()*Math.PI*2, sway:.02+rnd()*.05
+      sp:1+Math.floor(rnd()*3), rot:rnd()*Math.PI*2, sway:.02+rnd()*.05,
+      kind: MIXES[Math.floor(rnd()*MIXES.length)]
     });
   }
 }
-const ANIMATED = new Set(['sparkle','glitter','heart','petal','bokeh','bubble']);
+const ANIMATED = new Set(['sparkle','glitter','star','heart','petal','snow','bokeh','bubble','ring','mix']);
 
 function drawMotion(c, sc, t){
   if(state.motion==='none') return;
@@ -642,68 +660,99 @@ function drawMotion(c, sc, t){
   const X=PHOTO.x*sc, Y=PHOTO.y*sc, W=PHOTO.w*sc, H=PHOTO.h*sc;
   const base = Math.min(W,H), col = state.fxColor;
   const TAU = Math.PI*2;
+  const wrap01 = v => { const r = v % 1; return r < 0 ? r+1 : r; };
+  /* 위아래 끝에서 자연스럽게 사라지도록 하는 페이드 */
+  const edge = y => Math.min(1, Math.sin(Math.max(0,Math.min(1,y))*Math.PI)*2.4);
+  /* 부드럽게 켜졌다 꺼지는 반짝임 */
+  const twinkle = ph => { const v = (Math.sin(ph*TAU - Math.PI/2)+1)/2; return v*v*(3-2*v); };
+
   c.save();
   c.beginPath(); c.rect(X,Y,W,H); c.clip();
 
   for(const p of particles){
-    const ph = (t*p.sp + p.ph) % 1;
+    const kind = state.motion==='mix' ? p.kind : state.motion;
+    const ph = wrap01(t*p.sp + p.ph);
     let px, py, alpha = 1, size = base*.02*p.s, rot = p.rot;
 
-    if(state.motion==='sparkle' || state.motion==='glitter'){
+    if(kind==='sparkle' || kind==='glitter' || kind==='star'){
+      const tw = twinkle(ph);
       px = X + p.x*W; py = Y + p.y*H;
-      const tw = Math.sin(ph*TAU);
-      alpha = .18 + .82*Math.max(0,tw);
-      const k = state.motion==='glitter' ? .009 : .028;
-      size = base*k*p.s*(.55+.45*Math.max(0,tw));
-      rot = p.rot + ph*.6;
-    } else if(state.motion==='heart'){
-      let yy = (p.y - ph) % 1; if(yy<0) yy += 1;
+      alpha = .12 + .88*tw;
+      const k = kind==='glitter' ? .010 : (kind==='star' ? .026 : .030);
+      size = base*k*p.s*(.45+.55*tw);
+      rot = p.rot;
+    } else if(kind==='heart'){
+      const yy = wrap01(p.y - ph);
       px = X + (p.x + Math.sin((ph+p.ph)*TAU)*p.sway)*W;
       py = Y + yy*H;
-      alpha = Math.min(1, Math.sin(yy*Math.PI)*1.9)*.9;
-      size = base*.019*p.s;
-    } else if(state.motion==='petal'){
-      const yy = (p.y + ph) % 1;
-      px = X + (p.x + Math.sin((ph*2+p.ph)*TAU)*p.sway*1.6)*W;
+      alpha = edge(yy)*.9;
+      size = base*.019*p.s*(.9+.1*Math.sin(ph*TAU));
+    } else if(kind==='petal'){
+      const yy = wrap01(p.y + ph);
+      px = X + (p.x + Math.sin((ph*2+p.ph)*TAU)*p.sway*1.7)*W;
       py = Y + yy*H;
-      alpha = Math.min(1, Math.sin(yy*Math.PI)*1.9)*.85;
+      alpha = edge(yy)*.85;
       size = base*.017*p.s;
-      rot = p.rot + ph*TAU*.7;
-    } else if(state.motion==='bubble'){
-      let yy = (p.y - ph*.8) % 1; if(yy<0) yy += 1;
+      rot = p.rot + ph*TAU;
+    } else if(kind==='snow'){
+      const yy = wrap01(p.y + ph*.6);
+      px = X + (p.x + Math.sin((ph+p.ph)*TAU)*p.sway*1.3)*W;
+      py = Y + yy*H;
+      alpha = edge(yy)*.75;
+      size = base*.011*p.s;
+    } else if(kind==='bubble'){
+      const yy = wrap01(p.y - ph*.8);
       px = X + (p.x + Math.sin((ph+p.ph)*TAU)*p.sway)*W;
       py = Y + yy*H;
-      alpha = Math.min(1, Math.sin(yy*Math.PI)*1.8)*.55;
+      alpha = edge(yy)*.6;
       size = base*.024*p.s;
-    } else if(state.motion==='bokeh'){
-      let yy = (p.y - ph*.25) % 1; if(yy<0) yy += 1;
+    } else if(kind==='ring'){
+      px = X + p.x*W; py = Y + p.y*H;
+      alpha = Math.sin(ph*Math.PI)*.5;
+      size = base*(.012 + .085*ph)*p.s;
+    } else { /* bokeh */
+      const yy = wrap01(p.y - ph*.22);
       px = X + p.x*W; py = Y + yy*H;
-      alpha = .13 + .12*Math.sin(ph*TAU);
-      size = base*.075*p.s;
+      alpha = .12 + .11*Math.sin(ph*TAU);
+      size = base*.075*p.s*(.9+.1*Math.sin(ph*TAU+1));
     }
 
     c.globalAlpha = Math.max(0, Math.min(1, alpha));
-    if(state.motion==='bokeh'){
+
+    if(kind==='bokeh'){
       const g = c.createRadialGradient(px,py,0,px,py,size);
-      g.addColorStop(0, rgba(col,.85));
-      g.addColorStop(.55, rgba(col,.35));
+      g.addColorStop(0, rgba(col,.8));
+      g.addColorStop(.5, rgba(col,.34));
       g.addColorStop(1, rgba(col,0));
       c.fillStyle = g;
       c.beginPath(); c.arc(px,py,size,0,TAU); c.fill();
-    } else if(state.motion==='bubble'){
+    } else if(kind==='ring'){
+      c.strokeStyle = col; c.lineWidth = Math.max(1, size*.08);
+      c.shadowColor = rgba(col,.8); c.shadowBlur = size*.4;
+      c.beginPath(); c.arc(px,py,size,0,TAU); c.stroke();
+      c.shadowBlur = 0;
+    } else if(kind==='bubble'){
       c.strokeStyle = col; c.lineWidth = Math.max(1, size*.10);
       c.beginPath(); c.arc(px,py,size,0,TAU); c.stroke();
-      c.fillStyle = rgba(col,.28);
+      c.fillStyle = rgba(col,.26);
       c.beginPath(); c.arc(px,py,size,0,TAU); c.fill();
-      c.fillStyle = rgba('#ffffff',.75);
+      c.fillStyle = rgba('#ffffff',.7);
       c.beginPath(); c.arc(px-size*.32,py-size*.34,size*.17,0,TAU); c.fill();
+    } else if(kind==='snow'){
+      const g = c.createRadialGradient(px,py,0,px,py,size*1.9);
+      g.addColorStop(0, rgba(col,.95));
+      g.addColorStop(.45, rgba(col,.55));
+      g.addColorStop(1, rgba(col,0));
+      c.fillStyle = g;
+      c.beginPath(); c.arc(px,py,size*1.9,0,TAU); c.fill();
     } else {
       c.fillStyle = col;
       c.shadowColor = rgba(col,.9);
-      c.shadowBlur  = size*(state.motion==='glitter'?1.6:1.1);
-      if(state.motion==='heart') heartPath(c,px,py,size);
-      else if(state.motion==='petal') petalPath(c,px,py,size,rot);
-      else if(state.motion==='glitter'){ c.beginPath(); c.arc(px,py,size,0,TAU); }
+      c.shadowBlur = size*(kind==='glitter'?1.7:1.15);
+      if(kind==='heart') heartPath(c,px,py,size);
+      else if(kind==='petal') petalPath(c,px,py,size,rot);
+      else if(kind==='star') starPath(c,px,py,size,rot);
+      else if(kind==='glitter'){ c.beginPath(); c.arc(px,py,size,0,TAU); }
       else { c.save(); c.translate(px,py); c.rotate(rot); sparklePath(c,0,0,size); c.restore(); }
       c.fill();
       c.shadowBlur = 0;
@@ -790,7 +839,7 @@ function drawTextItem(c, it, sc){
   c.translate(it.x*sc, it.y*sc);
   c.rotate(it.rot);
   const fs = it.size*sc;
-  c.font = `${fs}px "${it.font}", "Nanum Pen Script", sans-serif`;
+  c.font = `${it.bold?800:400} ${fs}px "${it.font}", "Nanum Pen Script", sans-serif`;
   c.textAlign='center'; c.textBaseline='middle';
   const lines = (it.text||' ').split('\n');
   const lh = fs*1.16;
@@ -810,9 +859,14 @@ function drawTextItem(c, it, sc){
       c.lineWidth=fs*.15; c.strokeStyle=it.sub; c.strokeText(line,0,y);
       c.fillStyle=it.color; c.fillText(line,0,y);
     } else if(it.fx==='neon'){
-      c.shadowColor=it.color; c.shadowBlur=fs*.5;
-      c.fillStyle=it.color; c.fillText(line,0,y); c.fillText(line,0,y);
-      c.shadowBlur=fs*.16; c.fillStyle='#fff'; c.fillText(line,0,y);
+      c.lineJoin='round'; c.lineCap='round';
+      c.shadowColor = it.color;
+      c.shadowBlur = fs*.85; c.strokeStyle = it.color; c.lineWidth = fs*.16;
+      c.strokeText(line,0,y); c.strokeText(line,0,y);
+      c.shadowBlur = fs*.42; c.fillStyle = it.color;
+      c.fillText(line,0,y); c.fillText(line,0,y);
+      c.shadowBlur = fs*.14; c.fillStyle = '#fff'; c.fillText(line,0,y);
+      c.shadowBlur = 0; c.fillStyle = '#fff'; c.fillText(line,0,y);
     } else if(it.fx==='gradient'){
       const g=c.createLinearGradient(-w/2,0,w/2,0);
       g.addColorStop(0,it.color); g.addColorStop(.5,'#ffd6e6'); g.addColorStop(1,it.sub);
@@ -912,9 +966,9 @@ let animT = 0, animRAF = null, lastTS = 0, lastDraw = 0;
 function tickAnim(ts){
   animRAF = requestAnimationFrame(tickAnim);
   if(!lastTS) lastTS = ts;
-  animT = (animT + (ts-lastTS)/4200) % 1;
+  animT = (animT + (ts-lastTS)/5200) % 1;
   lastTS = ts;
-  if(ts-lastDraw < 42) return;
+  if(ts-lastDraw < 33) return;
   lastDraw = ts;
   renderTo(ctx, S, true, animT);
 }
@@ -1052,10 +1106,11 @@ function selectItem(it){
   if(it){
     $('textInput').value = it.text;
     $('fontSel').value = it.font;
-    Object.assign(state.text,{ font:it.font, fx:it.fx, color:it.color, sub:it.sub, size:it.size });
+    Object.assign(state.text,{ font:it.font, fx:it.fx, color:it.color, sub:it.sub, size:it.size, bold:!!it.bold });
     $('textSize').value = Math.round(Math.min(140,it.size));
     $('textSizeVal').textContent = Math.round(it.size);
     markPressed('fxChips',it.fx); markPressed('textSwatches',it.color); markPressed('subSwatches',it.sub);
+    markPressed('weights', it.bold?'bold':'normal');
     updateSubLabel();
   }
   render();
@@ -1070,7 +1125,7 @@ function addTextItem(){
   if(!t){ toast('문구를 먼저 적어주세요'); $('textInput').focus(); return; }
   pushHistory();
   const it = { text:t, font:state.text.font, fx:state.text.fx, color:state.text.color,
-               sub:state.text.sub, size:state.text.size,
+               sub:state.text.sub, size:state.text.size, bold:state.text.bold,
                x:PHOTO.x+PHOTO.w/2, y:PHOTO.y+PHOTO.h*0.78,
                rot:(Math.random()*.12-.06), _w:100, _h:40 };
   state.items.push(it); selectItem(it);
@@ -1232,6 +1287,10 @@ function updateSubLabel(){
   $('subColorField').style.display = l ? '' : 'none';
   if(l) $('subColorLabel').textContent = l;
 }
+makeChips('weights', [['normal','보통'],['bold','두껍게']], 'normal', v=>{
+  state.text.bold = (v==='bold');
+  if(state.selected){ state.selected.bold = state.text.bold; render(); }
+});
 makeChips('fxChips', FX, 'none', v=>{
   state.text.fx=v; updateSubLabel();
   if(state.selected){ state.selected.fx=v; render(); }
@@ -1357,7 +1416,7 @@ $('gifBtn').onclick = async () => {
     const out = document.createElement('canvas'); out.width=w; out.height=h;
     const oc = out.getContext('2d');
     const gif = new GIF({ workers:2, quality:8, width:w, height:h, workerScript:lib.worker, dither:false });
-    const delay = Math.round(2400/frames);
+    const delay = Math.round(2600/frames);
     for(let i=0;i<frames;i++){
       lc.setTransform(1,0,0,1,0,0);
       renderTo(lc, q, false, i/frames);
