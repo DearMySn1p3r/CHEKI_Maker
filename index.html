@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
-<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Jua&family=Gamja+Flower&family=Single+Day&family=Hi+Melody&family=Cute+Font&family=Nanum+Myeongjo:wght@400;700&family=Black+Han+Sans&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Black+Han+Sans&family=Cute+Font&family=Diphylleia&family=Dongle:wght@300;400;700&family=East+Sea+Dokdo&family=Gaegu:wght@300;400;700&family=Gamja+Flower&family=Gasoek+One&family=Gowun+Dodum&family=Hi+Melody&family=Jua&family=Kirang+Haerang&family=Moirai+One&family=Nanum+Brush+Script&family=Nanum+Myeongjo:wght@400;700&family=Nanum+Pen+Script&family=Poor+Story&family=Single+Day&family=Sunflower:wght@300;500;700&family=Yeon+Sung&display=swap" rel="stylesheet">
 <style>
   :root{
     --surface:rgba(255,255,255,.74);
@@ -316,6 +316,7 @@
         <div class="field row">
           <button class="btn sm" id="fillBtn">가운데로</button>
           <button class="btn sm" id="flipBtn">좌우 반전</button>
+          <button class="btn sm" id="resetPhotoBtn">원래대로</button>
         </div>
         <p class="note">드래그로 위치를 옮기고, 휠이나 두 손가락으로 크기와 각도를 맞춥니다. 사진은 항상 창을 가득 채우도록 자동으로 맞춰집니다.</p>
       </div>
@@ -492,14 +493,30 @@ const SUB_COLORS  = ['#ffffff','#5d4450','#ff5c8a','#ffb3d2','#ffe0ec','#f5619c'
 const FRAME_COLORS = ['#ffffff','#fff8fb','#fff1f6','#ffe6ef','#ffd9e7','#ffc9dd','#fdeef7','#fff7ef','#4a3a42','#211a1e'];
 const PAT_COLORS   = ['#ffdbe8','#fff0f6','#ffffff','#ffc2d8','#ffa8c8','#ffe3ee','#ffd0c4','#f7e2ec'];
 const FONTS = [
+  /* 손글씨 */
   ['Nanum Pen Script','나눔 펜'],
   ['Gaegu','개구'],
   ['Hi Melody','하이멜로디'],
   ['Gamja Flower','감자꽃'],
-  ['Cute Font','큐트'],
+  ['Poor Story','푸어스토리'],
+  ['East Sea Dokdo','동해 손글씨'],
+  ['Nanum Brush Script','붓글씨'],
   ['Single Day','싱글데이'],
+  ['Cute Font','큐트'],
+  /* 동글동글 */
+  ['Dongle','동글'],
+  ['Yeon Sung','연성'],
   ['Jua','주아'],
+  ['Kirang Haerang','기랑해랑'],
+  /* 통통한 */
+  ['Bagel Fat One','베이글'],
+  ['Gasoek One','가속'],
+  ['Moirai One','모이라이'],
   ['Black Han Sans','검은고딕'],
+  /* 단정한 */
+  ['Gowun Dodum','고운돋움'],
+  ['Sunflower','해바라기'],
+  ['Diphylleia','산하엽'],
   ['Nanum Myeongjo','명조'],
   ['Pretendard Variable','프리텐다드']
 ];
@@ -1190,9 +1207,14 @@ function clampPhoto(){
   dx = a*ux - b*uy; dy = a*uy + b*ux;
   p.x = pcx-dx; p.y = pcy-dy;
 }
+function centerPhoto(){
+  const p = state.photo; if(!p) return;
+  p.x = PHOTO.x+PHOTO.w/2; p.y = PHOTO.y+PHOTO.h/2;
+  clampPhoto(); syncPhotoUI(); render();
+}
 function fitPhoto(){
   const p = state.photo; if(!p) return;
-  p.rot = 0;
+  p.rot = 0; p.flip = false;
   p.scale = Math.max(PHOTO.w/p.img.naturalWidth, PHOTO.h/p.img.naturalHeight);
   p.x = PHOTO.x+PHOTO.w/2; p.y = PHOTO.y+PHOTO.h/2;
   clampPhoto(); syncPhotoUI(); render();
@@ -1259,7 +1281,11 @@ $('rot').oninput = e => {
   state.photo.rot=+e.target.value*Math.PI/180; clampPhoto(); syncPhotoUI(); render();
 };
 $('flipBtn').onclick = () => { if(state.photo){ state.photo.flip=!state.photo.flip; render(); } };
-$('fillBtn').onclick = () => fitPhoto();
+$('fillBtn').onclick = () => { if(state.photo) centerPhoto(); else toast('먼저 일러스트를 올려주세요'); };
+$('resetPhotoBtn').onclick = () => {
+  if(!state.photo){ toast('먼저 일러스트를 올려주세요'); return; }
+  fitPhoto(); toast('사진을 처음 상태로 되돌렸어요');
+};
 
 /* 싸인 */
 makeChips('brushTypes', BRUSHES, 'pen', v=>{ state.brush.type=v; });
@@ -1271,7 +1297,9 @@ $('clearInk').onclick = () => { if(state.strokes.length){ pushHistory(); state.s
 /* 글씨 */
 const fontSel = $('fontSel');
 FONTS.forEach(([v,l])=>{
-  const o=document.createElement('option'); o.value=v; o.textContent=l; o.style.fontFamily=`"${v}"`;
+  const o=document.createElement('option'); o.value=v; o.textContent=l;
+  o.style.fontFamily=`"${v}", sans-serif`;
+  if(v==='Dongle') o.style.fontSize='19px';
   fontSel.appendChild(o);
 });
 fontSel.value = state.text.font;
